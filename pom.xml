@@ -114,7 +114,27 @@
 									<mainClass>monarch.ebi.phenotype.utils.GetInBetweenClasses</mainClass>
 								</manifest>
 							</archive>
-							<finalName>pheno-utils-fillers</finalName>
+							<finalName>upheno-filler-pipeline</finalName>
+							<appendAssemblyId>false</appendAssemblyId>
+							<descriptorRefs>
+								<descriptorRef>jar-with-dependencies</descriptorRef>
+							</descriptorRefs>
+						</configuration>
+					</execution>
+					<execution>
+						<id>make-assembly-taxon</id>
+						<!-- bind to the packaging phase -->
+						<phase>package</phase>
+						<goals>
+							<goal>single</goal>
+						</goals>
+						<configuration>
+							<archive>
+								<manifest>
+									<mainClass>monarch.ebi.phenotype.utils.TaxonRestrictionApp</mainClass>
+								</manifest>
+							</archive>
+							<finalName>upheno-taxon-restriction</finalName>
 							<appendAssemblyId>false</appendAssemblyId>
 							<descriptorRefs>
 								<descriptorRef>jar-with-dependencies</descriptorRef>
