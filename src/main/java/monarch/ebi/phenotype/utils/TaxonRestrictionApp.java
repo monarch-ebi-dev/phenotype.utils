@@ -1,8 +1,10 @@
 package monarch.ebi.phenotype.utils;
 
+import org.apache.commons.io.FileUtils;
 import org.semanticweb.elk.owlapi.ElkReasonerFactory;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.*;
+import org.semanticweb.owlapi.model.parameters.Imports;
 import org.semanticweb.owlapi.reasoner.OWLReasoner;
 
 import java.io.*;
@@ -13,8 +15,10 @@ import java.util.*;
  */
 public class TaxonRestrictionApp {
     private static String OBOPURLSTRING = "http://purl.obolibrary.org/obo/";
+    private final Set<OWLClass> preserve_eq = new HashSet<>();
     private final File ontology_file;
     private final File ontology_file_out;
+    private final File preserve_eq_file;
     private final OWLClass taxon;
     private final String taxon_label;
     private final OWLClass phenotype_root;
@@ -24,12 +28,16 @@ public class TaxonRestrictionApp {
 
 
 
-    public TaxonRestrictionApp(File ontology_file, File ontology_file_out,String taxon, String taxon_label, String phenotype_root) throws IOException, OWLOntologyCreationException, OWLOntologyStorageException {
+    public TaxonRestrictionApp(File ontology_file, File ontology_file_out,String taxon, String taxon_label, String phenotype_root, File preserve_eq_file) throws IOException, OWLOntologyCreationException, OWLOntologyStorageException {
         this.ontology_file = ontology_file;
         this.ontology_file_out = ontology_file_out;
         this.taxon = cl(taxon);
         this.taxon_label = taxon_label;
         this.phenotype_root = cl(phenotype_root);
+        this.preserve_eq_file = preserve_eq_file;
+        if(preserve_eq_file.isFile()) {
+            FileUtils.readLines(preserve_eq_file,"utf-8").forEach(s->preserve_eq.add(df.getOWLClass(IRI.create(s))));
+        }
         run();
     }
 
@@ -41,6 +49,17 @@ public class TaxonRestrictionApp {
         Set<OWLAxiom> remove = new HashSet<>();
         Set<OWLAxiom> add = new HashSet<>();
         adding_taxon_restrictions(o, remove, add);
+
+        if(!preserve_eq.isEmpty()) {
+            for(OWLEquivalentClassesAxiom eq:o.getAxioms(AxiomType.EQUIVALENT_CLASSES, Imports.INCLUDED)) {
+                for(OWLClass n:eq.getNamedClasses()) {
+                    if(preserve_eq.contains(n)) {
+                        remove.add(eq);
+                    }
+                }
+            }
+        }
+
         for(OWLClass p:phenotypeClasses) {
             add_taxon_label(o, remove, add, p);
         }
@@ -115,6 +134,7 @@ public class TaxonRestrictionApp {
         String taxon = args[2];
         String taxon_label = args[3];
         String root_phenotype = args[4];
+        String preserve_eq_file_path = args[5];
 
         /*
         String ontology_path = "/data/hp.owl";
@@ -125,8 +145,9 @@ public class TaxonRestrictionApp {
         */
         File ontology_file = new File(ontology_path);
         File ontology_file_out = new File(ontology_path_out);
+        File preserve_eq_file = new File(preserve_eq_file_path);
 
-        new TaxonRestrictionApp(ontology_file, ontology_file_out, taxon, taxon_label, root_phenotype);
+        new TaxonRestrictionApp(ontology_file, ontology_file_out, taxon, taxon_label, root_phenotype, preserve_eq_file);
     }
 
 }
