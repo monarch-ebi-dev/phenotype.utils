@@ -18,25 +18,23 @@ public class TaxonRestrictionApp {
     private final Set<OWLClass> preserve_eq = new HashSet<>();
     private final File ontology_file;
     private final File ontology_file_out;
-    private final File preserve_eq_file;
     private final OWLClass taxon;
     private final String taxon_label;
-    private final OWLClass phenotype_root;
+    private final String phenotype_prefix;
     private static OWLDataFactory df = OWLManager.getOWLDataFactory();
     private static OWLObjectProperty haspart = df.getOWLObjectProperty(IRI.create("http://purl.obolibrary.org/obo/BFO_0000051"));
     private final OWLObjectProperty present_in_taxon = df.getOWLObjectProperty(IRI.create("http://purl.obolibrary.org/obo/RO_0002175"));
 
 
 
-    public TaxonRestrictionApp(File ontology_file, File ontology_file_out,String taxon, String taxon_label, String phenotype_root, File preserve_eq_file) throws IOException, OWLOntologyCreationException, OWLOntologyStorageException {
+    public TaxonRestrictionApp(File ontology_file, File ontology_file_out,String taxon, String taxon_label, String phenotype_prefix, File preserve_eq_file) throws IOException, OWLOntologyCreationException, OWLOntologyStorageException {
         this.ontology_file = ontology_file;
         this.ontology_file_out = ontology_file_out;
         this.taxon = cl(taxon);
         this.taxon_label = taxon_label;
-        this.phenotype_root = cl(phenotype_root);
-        this.preserve_eq_file = preserve_eq_file;
+        this.phenotype_prefix = phenotype_prefix;
         if(preserve_eq_file.isFile()) {
-            FileUtils.readLines(preserve_eq_file,"utf-8").forEach(s->preserve_eq.add(df.getOWLClass(IRI.create(s))));
+            FileUtils.readLines(preserve_eq_file,"utf-8").forEach(s->preserve_eq.add(cl(s)));
         }
         run();
     }
@@ -44,32 +42,51 @@ public class TaxonRestrictionApp {
     private void run() throws IOException, OWLOntologyCreationException, OWLOntologyStorageException {
         OWLOntologyManager man = OWLManager.createOWLOntologyManager();
         OWLOntology o = man.loadOntology(IRI.create(ontology_file));
-        OWLReasoner r = new ElkReasonerFactory().createReasoner(o);
-        Set<OWLClass> phenotypeClasses = new HashSet<>(r.getSubClasses(phenotype_root,false).getFlattened());
+        Set<OWLClass> phenotypeClasses = new HashSet<>();
+        for(OWLClass cl:o.getClassesInSignature(Imports.INCLUDED)) {
+            if(cl.getIRI().toString().startsWith(phenotype_prefix)) {
+                phenotypeClasses.add(cl);
+            }
+        }
         Set<OWLAxiom> remove = new HashSet<>();
         Set<OWLAxiom> add = new HashSet<>();
-        adding_taxon_restrictions(o, remove, add);
+        Set<OWLAxiom> eqs = new HashSet<>();
 
-        if(!preserve_eq.isEmpty()) {
-            for(OWLEquivalentClassesAxiom eq:o.getAxioms(AxiomType.EQUIVALENT_CLASSES, Imports.INCLUDED)) {
-                for(OWLClass n:eq.getNamedClasses()) {
-                    if(preserve_eq.contains(n)) {
-                        remove.add(eq);
-                    }
+        for(OWLEquivalentClassesAxiom eq:o.getAxioms(AxiomType.EQUIVALENT_CLASSES, Imports.INCLUDED)) {
+            if(eq.getNamedClasses().size()>1) {
+                remove.add(eq);
+                continue;
+            }
+            for(OWLClass n:eq.getNamedClasses()) {
+                if(preserve_eq.contains(n)) {
+                    eqs.add(eq);
+                } else {
+                    remove.add(eq);
                 }
             }
         }
+
+
+        adding_taxon_restrictions(eqs, remove, add);
 
         for(OWLClass p:phenotypeClasses) {
             add_taxon_label(o, remove, add, p);
         }
 
-        log(remove.size());
-        log(add.size());
+        //log(remove.size());
+        //log(add.size());
 
-        Set<OWLAxiom> axioms = new HashSet<>(o.getAxioms());
+        Set<OWLAxiom> axioms = new HashSet<>(o.getAxioms(Imports.INCLUDED));
         axioms.removeAll(remove);
         axioms.addAll(add);
+
+        /*for(OWLAxiom ax:axioms) {
+            for(OWLClass c:ax.getClassesInSignature()) {
+                if(c.getIRI().toString().endsWith("HP_0003214")) {
+                    log(ax);
+                }
+            }
+        }*/
 
         OWLOntology out = man.createOntology(axioms);
 
@@ -87,8 +104,9 @@ public class TaxonRestrictionApp {
         }
     }
 
-    private void adding_taxon_restrictions(OWLOntology o, Set<OWLAxiom> remove, Set<OWLAxiom> add) {
-        for(OWLAxiom ax:o.getAxioms(AxiomType.EQUIVALENT_CLASSES)) {
+    private void adding_taxon_restrictions(Set<OWLAxiom> eqs, Set<OWLAxiom> remove, Set<OWLAxiom> add) {
+        for(OWLAxiom ax:eqs) {
+            if(ax instanceof OWLEquivalentClassesAxiom) {
             OWLEquivalentClassesAxiom eq = (OWLEquivalentClassesAxiom)ax;
             Set<OWLClass> named_cls = eq.getNamedClasses();
             OWLClass named = null;
@@ -104,16 +122,17 @@ public class TaxonRestrictionApp {
                                 if (ce.getFiller() instanceof OWLObjectIntersectionOf) {
                                     OWLObjectIntersectionOf ois = (OWLObjectIntersectionOf) ce.getFiller();
                                     Set<OWLClassExpression> operands = new HashSet<>(ois.getOperands());
-                                    operands.add(df.getOWLObjectSomeValuesFrom(present_in_taxon,taxon));
+                                    operands.add(df.getOWLObjectSomeValuesFrom(present_in_taxon, taxon));
                                     OWLObjectIntersectionOf oisn = df.getOWLObjectIntersectionOf(operands);
                                     remove.add(ax);
-                                    add.add(df.getOWLEquivalentClassesAxiom(named,df.getOWLObjectSomeValuesFrom(haspart,oisn)));
+                                    add.add(df.getOWLEquivalentClassesAxiom(named, df.getOWLObjectSomeValuesFrom(haspart, oisn)));
                                     break;
                                 }
                             }
                         }
                     }
                 }
+            }
             }
         }
     }
@@ -133,21 +152,22 @@ public class TaxonRestrictionApp {
         String ontology_path_out = args[1];
         String taxon = args[2];
         String taxon_label = args[3];
-        String root_phenotype = args[4];
+        String phenotype_prefix = args[4];
         String preserve_eq_file_path = args[5];
 
-        /*
-        String ontology_path = "/data/hp.owl";
+/*
+        String ontology_path = "/ws/upheno-dev/src/curation/tmp/hp.owl";
         String ontology_path_out = "/data/hp-taxon.owl";
         String taxon = "http://purl.obolibrary.org/obo/NCBITaxon_9606";
-        String taxon_label = "human";
-        String root_phenotype = "http://purl.obolibrary.org/obo/HP_0000118";
-        */
+        String taxon_label = "Human";
+        String phenotype_prefix = "http://purl.obolibrary.org/obo/HP_";
+        String preserve_eq_file_path = "/ws/upheno-dev/src/curation/tmp/preserve_eq_hp.owl";
+*/
         File ontology_file = new File(ontology_path);
         File ontology_file_out = new File(ontology_path_out);
         File preserve_eq_file = new File(preserve_eq_file_path);
 
-        new TaxonRestrictionApp(ontology_file, ontology_file_out, taxon, taxon_label, root_phenotype, preserve_eq_file);
+        new TaxonRestrictionApp(ontology_file, ontology_file_out, taxon, taxon_label, phenotype_prefix, preserve_eq_file);
     }
 
 }

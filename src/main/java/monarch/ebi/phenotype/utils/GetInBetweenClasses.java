@@ -30,14 +30,16 @@ public class GetInBetweenClasses {
     private final File legal_filler_iri_patterns;
     private final File legal_pattern_vars;
     private static OWLDataFactory df = OWLManager.getOWLDataFactory();
+    private final int SUPER_CLASS_DEPTH;
 
-    public GetInBetweenClasses(File ontology_file, File oid_pattern_matches_dir, File pattern_dir, File oid_upheno_fillers_dir, File legal_filler_iri_patterns, File legal_pattern_vars) throws IOException, OWLOntologyCreationException {
+    public GetInBetweenClasses(File ontology_file, File oid_pattern_matches_dir, File pattern_dir, File oid_upheno_fillers_dir, File legal_filler_iri_patterns, File legal_pattern_vars, int SUPER_CLASS_DEPTH) throws IOException, OWLOntologyCreationException {
         this.ontology_file = ontology_file;
         this.oid_pattern_matches_dir = oid_pattern_matches_dir;
         this.pattern_dir = pattern_dir;
         this.oid_upheno_fillers_dir = oid_upheno_fillers_dir;
         this.legal_filler_iri_patterns = legal_filler_iri_patterns;
         this.legal_pattern_vars = legal_pattern_vars;
+        this.SUPER_CLASS_DEPTH = SUPER_CLASS_DEPTH;
         run();
     }
 
@@ -47,7 +49,8 @@ public class GetInBetweenClasses {
         OWLOntology o = OWLManager.createOWLOntologyManager().loadOntology(IRI.create(ontology_file));
         OWLReasoner r = new ElkReasonerFactory().createReasoner(o);
         for (File tsv_file : oid_pattern_matches_dir.listFiles((dir, name) -> name.toLowerCase().endsWith(".tsv"))) {
-            extract_fillers_for_tsv(r, tsv_file);
+            //if(tsv_file.getName().contains("abnormalAbsenceOfBehavi"))
+                extract_fillers_for_tsv(r, tsv_file);
         }
 
     }
@@ -72,11 +75,10 @@ public class GetInBetweenClasses {
 
                 //log("Filler columns: "+filler_columns.toString());
                 Set<Map<String, String>> upheno_fillers = computeAllFillerCombinations(r, tsv, filler, filler_columns);
-                log("transformed combinations:");
+                //log("transformed combinations:");
                 //log(upheno_fillers);
                 //System.exit(0);
                 log("Cartesian product size: " + upheno_fillers.size());
-
                 exportTSVs(upheno_fillers, filler_columns, tsv_file.getName());
             //}
         }
@@ -86,7 +88,11 @@ public class GetInBetweenClasses {
         Set<List<OWLClass>> cp = new HashSet<>();
         if(fillers.size()==1) {
             //log("Only one feature, no cartesian product necessary.");
-            cp.addAll(fillers.stream().distinct().collect(Collectors.toList()));
+            for(List<OWLClass> column:fillers) {
+                for(OWLClass cl:column) {
+                    cp.add(Collections.singletonList(cl));
+                }
+            }
         }
         else {
             //log("More than one feature, computing cartesian product.");
@@ -99,14 +105,15 @@ public class GetInBetweenClasses {
 
     private Set<Map<String, String>> computeAllFillerCombinations(OWLReasoner r, List<Map<String, String>> tsv, Map<String, OWLClass> filler, List<String> filler_columns) {
         Set<Map<String, String>> upheno_fillers = new HashSet<>();
-        log("Computing all filler combinations..");
+        //log("Computing all filler combinations..");
         for (Map<String, String> rec : tsv) {
-            log("Record: "+rec);
+            //log("Record: "+rec);
             // The filler_combinations will contain one list of owlclasses for each feature (anatomical_entity, biological_process, etc)
             List<List<OWLClass>> filler_combinations = new ArrayList<>();
             boolean at_least_one_column_no_fillers = false;
             for (String filler_col : filler_columns) {
                 OWLClass cl = cl(rec.get(filler_col));
+                //log(cl);
                 // Computing all inferences between the filler class declared in the pattern and the class in the record. Filtering out those fillers that are not declared legal, species independent fillers in the legal_filler.txt file. If the current column is configured to be expanded to superclasses, it is done, else only the entity itself is taken over.
                 List<OWLClass> classes_in_between = between(cl, filler.get(filler_col), r, legal_patterns_vars_set.contains(filler_col));
                 if(classes_in_between.isEmpty()) {
@@ -124,10 +131,10 @@ public class GetInBetweenClasses {
                 log("At least one column has no fillers for rec: "+rec);
             } else {
                 Set<List<OWLClass>> cp = computeCartesianProduct(filler_combinations);
-                //log("Cartesian:");
-                //cp.forEach(this::log);
+                //log("CartesianXYZ:");
                 //System.exit(0);
                 for(List<OWLClass> row:cp) {
+                    //log(cp);
                     Map<String,String> nrec = new HashMap<>();
                     for (int i = 0; i < filler_columns.size(); i++) {
                         try {
@@ -139,6 +146,7 @@ public class GetInBetweenClasses {
                             System.exit(0);
                         }
                     }
+                    //log(nrec);
                     upheno_fillers.add(nrec);
                 }
             }
@@ -177,23 +185,25 @@ public class GetInBetweenClasses {
         System.out.println(o.toString());
     }
 
-    private List<OWLClass> between(OWLClass e, OWLClass filler, OWLReasoner r, boolean superCls) {
+    private List<OWLClass> between(OWLClass e, OWLClass filler, OWLReasoner r, boolean legal_pattern_var) {
         //log(e);
         //log(filler);
-        List<OWLClass> between = new ArrayList<>();
-        Set<OWLClass> superClasses = new HashSet<>();
+        Set<OWLClass> between = new HashSet<>();
+
         if(r.getUnsatisfiableClasses().contains(e)) {
             log(e+" is unsatisfiable, ignoring");
-            return between;
+            return new ArrayList<>(between);
         }
-        if(superCls) {
-            superClasses.addAll(getSuperclasses(e,r,3));
+
+        Set<OWLClass> superClasses = new HashSet<>();
+        if(legal_pattern_var) {
+            superClasses.addAll(getSuperclasses(e,r,SUPER_CLASS_DEPTH));
             superClasses.add(e);
         } else {
             superClasses.add(e);
         }
         if(superClasses.size()>1000) {
-            log("SIZE >10");
+            log("Number of superclasses >1000");
             log(e);
             log(superClasses.size());
             //log(superClasses);
@@ -201,7 +211,7 @@ public class GetInBetweenClasses {
         }
         if(!r.getSuperClasses(e, false).getFlattened().contains(filler)) {
             log(e +" is not a legal instance of the filler! This should not happen.");
-            return between;
+            return new ArrayList<>(between);
         }
         for(OWLClass s:superClasses) {
             if(legalFiller(s)) {
@@ -209,7 +219,8 @@ public class GetInBetweenClasses {
             }
         }
         between.removeAll(r.getSuperClasses(filler, false).getFlattened());
-        return between;
+        between.add(filler);
+        return new ArrayList<>(between);
     }
 
     private Collection<? extends OWLClass> getSuperclasses(OWLClass e, OWLReasoner r, int i) {
@@ -235,11 +246,12 @@ public class GetInBetweenClasses {
         String oid_upheno_fillers_dir_path = args[3];
         String legal_filler_iri_patterns_path = args[4];
         String legal_pattern_vars_path = args[5];
-
-       /*String ontology_path = "/ws/upheno-dev/src/curation/ontologies-for-matching/hp.owl";
-        String oid_pattern_matches_dir_path = "/ws/upheno-dev/src/curation/pattern-matches/hp";
+        int SUPER_CLASS_DEPTH = Integer.valueOf(args[6]);
+/*
+        String ontology_path = "/ws/upheno-dev/src/curation/ontologies-for-matching/mp.owl";
+        String oid_pattern_matches_dir_path = "/ws/upheno-dev/src/curation/pattern-matches/mp";
         String pattern_dir_path = "/ws/upheno-dev/src/curation/patterns-for-matching/";
-        String oid_upheno_fillers_dir_path = "/ws/upheno-dev/src/curation/upheno-fillers/hp";
+        String oid_upheno_fillers_dir_path = "/ws/upheno-dev/src/curation/upheno-fillers/mp";
         String legal_filler_iri_patterns_path = "/ws/upheno-dev/src/curation/legal_fillers.txt";
         String legal_pattern_vars_path = "/ws/upheno-dev/src/curation/legal_pattern_vars.txt";
 */
@@ -250,7 +262,7 @@ public class GetInBetweenClasses {
         File legal_filler_iri_patterns = new File(legal_filler_iri_patterns_path);
         File legal_pattern_vars = new File(legal_pattern_vars_path);
 
-        new GetInBetweenClasses(ontology_file, oid_pattern_matches_dir, pattern_dir, oid_upheno_fillers_dir, legal_filler_iri_patterns, legal_pattern_vars);
+        new GetInBetweenClasses(ontology_file, oid_pattern_matches_dir, pattern_dir, oid_upheno_fillers_dir, legal_filler_iri_patterns, legal_pattern_vars,SUPER_CLASS_DEPTH);
     }
 
     private Map<String, Object> loadPattern(File pattern) throws FileNotFoundException {
@@ -262,6 +274,7 @@ public class GetInBetweenClasses {
 
     private List<Map<String, String>> loadTsv(File tsv_file) throws IOException {
         List<Map<String, String>> tsv = new ArrayList<>();
+        log("Load TSV: "+tsv_file);
         List<String> lines = FileUtils.readLines(tsv_file, "utf-8");
         boolean first = true;
         String[] header = null;
@@ -273,7 +286,13 @@ public class GetInBetweenClasses {
                 first = false;
             } else {
                 for (int i = 0; i < header.length; i++) {
-                    rec.put(header[i], row[i]);
+                    String val = "";
+                    if(row.length>i) {
+                        val = row[i];
+                    } else {
+                        log("Warning, row has less columns than header.. ");
+                    }
+                    rec.put(header[i], val);
                 }
                 tsv.add(rec);
             }
@@ -296,7 +315,7 @@ public class GetInBetweenClasses {
         }
 
         try {
-            System.out.println("Exporting to file: "+tsvf);
+            log("Exporting to file: "+tsvf);
             FileUtils.writeLines(tsvf, outlines);
         } catch (IOException e) {
             // TODO Auto-generated catch block
@@ -304,260 +323,4 @@ public class GetInBetweenClasses {
         }
     }
 
-	/*
-	private void exportTSVs(List<FillerData> fillers) {
-		System.out.println("EXPORTING...");
-		for (FillerData pattern : fillers) {
-			System.out.println(pattern);
-			File tsvf = new File(outdir,pattern.getPattern().trim().replaceAll(".yaml\\:$", ".tsv").trim());
-			
-			Map<Filler, List<OWLClass>> fd = pattern.getFillers();
-			List<String> columns = new ArrayList<>();
-			List<List<OWLClass>> all = new ArrayList<>();
-			for (Filler col : fd.keySet()) {
-				columns.add(col.getColumn());
-				all.add(fd.get(col));
-			}
-			List<List<OWLClass>> rows = multiply(all);
-			//rows.forEach(list->{System.out.println("BLOCK"); list.forEach(System.out::println);});
-			List<String> outlines = new ArrayList<>();
-			String headrow = "";
-			for(String col:columns) {
-				headrow += col+"\t";
-			}
-			outlines.add(headrow.trim());
-			
-			for(List<OWLClass> row:rows) {
-				String line = "";
-				for(OWLClass c:row) {
-					line+=c.getIRI().toString()+"\t";
-				}
-				outlines.add(line.trim());
-			}
-			try {
-				System.out.println("Exporting to file: "+tsvf);
-				FileUtils.writeLines(tsvf, outlines);
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
-	}
-	
-	/*private String generateID(String pattern,List<OWLClass> row) {
-		StringBuilder sb = new StringBuilder();
-		String s=pattern;
-		row.forEach(c->sb.append(c.getIRI().toString()));
-		for(OWLClass c:row) {
-			s+=c.getIRI().toString();
-		}
-		System.out.println(s);
-		System.out.println(s.hashCode());
-		System.out.println(s.toString().hashCode());
-		return "http://purl.obolibrary.org/obo/upheno/UPHENO_"+;
-	}*/
-	/*
-	//https://codereview.stackexchange.com/questions/129065/form-every-unique-combination-of-the-items-of-a-list-of-lists
-	private static void multiply(List<List<OWLClass>> factors, List<OWLClass> current, List<List<OWLClass>> results) {
-        if (current.size() >= factors.size()) {
-            // Don't really need to make a deeper copy with String values
-            // but might as well in case we change types later.
-            List<OWLClass> result = new ArrayList<>();
-            for (OWLClass s : current) {
-                result.add(s);
-            }
-            results.add(result);
-
-            return;
-        }
-
-        int currentIndex = current.size();
-        for (OWLClass s : factors.get(currentIndex)) {
-            current.add(s);
-            multiply(factors, current, results);
-            current.remove(currentIndex);
-        }
-    }
-
-    private static List<List<OWLClass>> multiply(List<List<OWLClass>> factors) {
-        List<List<OWLClass>> results = new ArrayList<>();
-        multiply(factors, new ArrayList<>(), results);
-        return results;
-    }
-
-	private void extractFillerHierarchies(List<FillerData> fillers) {
-		System.out.println("extractHierarchies..");
-		for (FillerData pattern : fillers) {
-			System.out.println(pattern);
-			Map<Filler, List<OWLClass>> fd = pattern.getFillers();
-			for (Filler upper : fd.keySet()) {
-				//System.out.println(upper);
-				Set<OWLClass> subclasses = getSubClasses(upper.getOWLClass());
-				List<OWLClass> fillerclasses = fd.get(upper);
-				Set<OWLClass> superclasses = getSuperClasses(fillerclasses);
-				Set<OWLClass> inter = new HashSet<>();
-				
-				if(superclasses.contains(upper.getOWLClass())) {
-					inter.addAll(subclasses);
-					inter.retainAll(superclasses);
-				} else {
-					inter.addAll(superclasses);
-				}
-				inter.addAll(fillerclasses);
-				inter.add(upper.getOWLClass());
-				System.out.println("filler: "+fillerclasses.size());
-				//fillerclasses.forEach(System.out::println);
-				System.out.println("subclasses: "+subclasses.size());
-				//subclasses.forEach(System.out::println);
-				System.out.println("superclasses: "+superclasses.size());
-				superclasses.forEach(System.out::println);
-				System.out.println("inter: "+inter.size());
-				//inter.forEach(System.out::println);
-				pattern.addFiller(upper, new ArrayList<>(inter));
-			}
-
-		}
-	}
-
-	private void prepareReasoners(List<String> ontology_iris) throws OWLOntologyCreationException {
-		System.out.println("Loading UBERON");
-		OWLOntology o_uberon = OWLManager.createOWLOntologyManager().loadOntology(IRI.create(UBERON));
-		SyntacticLocalityModuleExtractor slme = new SyntacticLocalityModuleExtractor(o_uberon.getOWLOntologyManager(),o_uberon, ModuleType.BOT);
-
-
-		for (String iri_s : ontology_iris) {
-			System.out.println("Loading ontology: |" + iri_s+"|");
-			OWLOntology o = OWLManager.createOWLOntologyManager().loadOntology(IRI.create(iri_s));
-
-			Set<OWLAxiom> uberonalign = new HashSet<>();
-
-			for(OWLClass c:o.getClassesInSignature(Imports.INCLUDED)) {
-				Set<OWLClass> uberonxrefs = getUberonXREFS(c,o);
-				for(OWLClass ux:uberonxrefs) {
-					uberonalign.add(daf.getOWLSubClassOfAxiom(c,ux));
-				}
-			}
-			if(!uberonalign.isEmpty()) {
-				System.out.println("Adding UBERON in..");
-				o.getOWLOntologyManager().addAxioms(o, uberonalign);
-				Set<OWLEntity> sig = new HashSet<>(o.getClassesInSignature(Imports.INCLUDED));
-				Set<OWLAxiom> umodule = slme.extract(sig);
-				o.getOWLOntologyManager().addAxioms(o, umodule);
-				OWLOntologyManager m = OWLManager.createOWLOntologyManager();
-				String on = iri_s.replaceAll(OBOPURLSTRING,"").replaceAll("[.]owl$","").replaceAll("[^a-zA-Z0-9_]","");
-				String filename = on+"-uberon-mappings.owl";
-				OWLOntology o_mapping = m.createOntology(uberonalign,IRI.create(UPHENOMAPPINGBASE+filename));
-				try {
-					m.saveOntology(o_mapping,new FileOutputStream(new File(outdir,filename)));
-				} catch (OWLOntologyStorageException e) {
-					e.printStackTrace();
-				} catch (FileNotFoundException e) {
-					e.printStackTrace();
-				}
-			}
-			OWLReasoner r = new ElkReasonerFactory().createReasoner(o);
-			reasoners.add(r);
-		}
-	}
-
-	private Set<OWLClass> getUberonXREFS(OWLClass c, OWLOntology o) {
-		Set<OWLClass> xrefs = new HashSet<>();
-		for(OWLAnnotation annotation: EntitySearcher.getAnnotations(c,o,ap_xref)) {
-
-			OWLAnnotationValue value = annotation.getValue();
-			String iri = value.asLiteral().or(daf.getOWLLiteral("")).getLiteral();
-				if(iri.toString().startsWith("http://purl.obolibrary.org/obo/UBERON_")) {
-					xrefs.add(daf.getOWLClass(IRI.create(iri)));
-				} else if(iri.toString().startsWith("UBERON:")) {
-					xrefs.add(daf.getOWLClass(IRI.create(iri.replaceAll("UBERON:","http://purl.obolibrary.org/obo/UBERON_"))));
-				}
-		}
-		return xrefs;
-	}
-
-	private Set<OWLClass> getSuperClasses(Collection<OWLClass> fillerclasses) {
-		Set<OWLClass> fillers = new HashSet<>();
-		for (OWLReasoner r : reasoners) {
-			for (OWLClass c : fillerclasses) {
-				Set<OWLClass> add = r.getSuperClasses(c, false).getFlattened();
-				add.removeAll(r.getUnsatisfiableClasses().getEntities());
-				fillers.addAll(add);
-			}
-		}
-		fillers.remove(daf.getOWLThing());
-		fillers.remove(daf.getOWLNothing());
-		return fillers;
-	}
-
-	private Set<OWLClass> getSubClasses(OWLClass upper) {
-		Set<OWLClass> fillers = new HashSet<>();
-		for (OWLReasoner r : reasoners) {
-			Set<OWLClass> add = r.getSubClasses(upper, false).getFlattened();
-			add.removeAll(r.getUnsatisfiableClasses().getEntities());
-			fillers.addAll(add);
-		}
-		fillers.remove(daf.getOWLThing());
-		fillers.remove(daf.getOWLNothing());
-		return fillers;
-	}
-
-	private static OWLClass oc(String s) {
-		return daf.getOWLClass(IRI.create(s));
-	}
-
-	public static void main(String[] args) throws OWLOntologyCreationException, IOException {
-		String ontology_path = args[0];
-		String oid_pattern_matches_dir_path = args[1];
-		String pattern_dir_path = args[2];
-		String oid_upheno_fillers_dir_path = args[3];
-
-		File ontology_file = new File(ontology_path);
-		File oid_pattern_matches_dir = new File(oid_pattern_matches_dir_path);
-		File pattern_dir = new File(pattern_dir_path);
-		File oid_upheno_fillers_dir = new File(oid_upheno_fillers_dir_path);
-
-		new GetInBetweenClasses(ontology_file, oid_pattern_matches_dir, pattern_dir, oid_upheno_fillers_dir);
-	}
-
-	private static List<FillerData> prepare_fillers(File fillersf) throws IOException {
-		List<String> yaml = FileUtils.readLines(fillersf, Charset.forName("utf-8"));
-		// yaml.stream().forEach(System.out::println);
-		OWLClass filler = null;
-		String col = "";
-		Set<OWLClass> fillers = new HashSet<>();
-		List<FillerData> df = new ArrayList<>();
-		FillerData fd = null;
-		for (String s : yaml) {
-			if (s.matches("^[a-zA-Z].*")) {
-				if (fd != null) {
-					if(!fillers.isEmpty()) {
-						fd.addFiller(new Filler(filler,col), new ArrayList<>(fillers));
-						fillers.clear();
-						col = "";
-						filler = null;
-					}
-					if (!fd.isEmpty()) {
-						df.add(fd);
-					}
-				}
-				fd = new FillerData(s);
-			} else if (s.matches("^\\s*filler.*")) {
-				filler = oc(s.replaceAll("filler\\:", "").trim());
-			} else if (s.matches("^\\s*keys.*")) {
-				// System.out.println(s);
-			} else if (s.matches(".*[-]\\s.*")) { // Subclass
-				fillers.add(oc(s.replaceAll(" - ", "").trim()));
-			} else { //column name..
-				if(!fillers.isEmpty()) {
-				fd.addFiller(new Filler(filler,col), new ArrayList<>(fillers));
-				fillers.clear();
-				}
-				col = s.replaceAll(":", "").trim(); // col
-				filler = null;
-				
-			} 
-		}
-		return df;
-	}
-	*/
 }
