@@ -82,6 +82,26 @@ public class UphenoRelationshipAugmentationApp {
         }
         return add;
     }
+
+    private Set<OWLAxiom> adding_label_match(OWLOntology o) {
+
+        Set<OWLAxiom> add = new HashSet<>();
+        OWLReasoner r = new ElkReasonerFactory().createReasoner(o);
+        Set<OWLClass> unsat = new HashSet<>(r.getUnsatisfiableClasses().getEntities());
+        for(OWLClass phenotype:phenotypes) {
+            if(unsat.contains(phenotype)) {
+                continue;
+            }
+            for(OWLClass equivalents:r.getEquivalentClasses(phenotype)) {
+                if(!unsat.contains(phenotype)&&!equivalents.equals(phenotype)) {
+                    OWLAnnotationAssertionAxiom ax_new = df.getOWLAnnotationAssertionAxiom(Entities.has_phenotypic_analogue,phenotype.getIRI(),equivalents.getIRI());
+                    add.add(ax_new);
+                }
+            }
+        }
+        return add;
+    }
+
     private Set<OWLAxiom> adding_has_phenotype_affecting(OWLOntology o) {
         Set<OWLAxiom> add = new HashSet<>();
         for(OWLAxiom ax:o.getAxioms(AxiomType.EQUIVALENT_CLASSES)) {
@@ -113,9 +133,21 @@ public class UphenoRelationshipAugmentationApp {
                     if (!bearer_expression.getProperty().isAnonymous()) {
                         OWLObjectProperty ii_po = bearer_expression.getProperty().asOWLObjectProperty();
                         if (ii_po.equals(Entities.inheres_in)||ii_po.equals(Entities.inheres_in_part_of)) {
-                            OWLObjectSomeValuesFrom relation = df.getOWLObjectSomeValuesFrom(Entities.has_phenotype_affecting,bearer_expression.getFiller());
-                            OWLSubClassOfAxiom ax_new = df.getOWLSubClassOfAxiom(named,relation);
-                            add.add(ax_new);
+                            OWLClassExpression bearer_filler = bearer_expression.getFiller();
+                            if (!bearer_filler.equals(df.getOWLThing()) && !bearer_filler.equals(df.getOWLNothing())) {
+                                OWLObjectSomeValuesFrom relation = df.getOWLObjectSomeValuesFrom(Entities.has_phenotype_affecting, bearer_filler);
+                                OWLSubClassOfAxiom ax_new = df.getOWLSubClassOfAxiom(named, relation);
+                                add.add(ax_new);
+                            }
+                            if (bearer_expression.isAnonymous()) {
+                                for (OWLClass cbearer : bearer_expression.getClassesInSignature()) {
+                                    OWLAnnotationAssertionAxiom hae = df.getOWLAnnotationAssertionAxiom(Entities.has_associated_entity, named.getIRI(), cbearer.getIRI());
+                                    add.add(hae);
+                                }
+                            } else {
+                                OWLAnnotationAssertionAxiom hae = df.getOWLAnnotationAssertionAxiom(Entities.has_associated_entity, named.getIRI(), bearer_expression.asOWLClass().getIRI());
+                                add.add(hae);
+                            }
                         }
                     }
                 }

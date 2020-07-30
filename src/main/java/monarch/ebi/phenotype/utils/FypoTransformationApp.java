@@ -1,19 +1,22 @@
 package monarch.ebi.phenotype.utils;
 
 import org.apache.commons.io.FileUtils;
-import org.semanticweb.elk.owlapi.ElkReasonerFactory;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.*;
 import org.semanticweb.owlapi.model.parameters.Imports;
-import org.semanticweb.owlapi.reasoner.OWLReasoner;
+import org.semanticweb.owlapi.search.EntitySearcher;
 
-import java.io.*;
-import java.util.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Hello world!
  */
-public class TaxonRestrictionApp {
+public class FypoTransformationApp {
     private static String OBOPURLSTRING = "http://purl.obolibrary.org/obo/";
     private final Set<OWLClass> preserve_eq = new HashSet<>();
     private final File ontology_file;
@@ -27,7 +30,7 @@ public class TaxonRestrictionApp {
 
 
 
-    public TaxonRestrictionApp(File ontology_file, File ontology_file_out,String taxon, String taxon_label, String phenotype_prefix, File preserve_eq_file) throws IOException, OWLOntologyCreationException, OWLOntologyStorageException {
+    public FypoTransformationApp(File ontology_file, File ontology_file_out, String taxon, String taxon_label, String phenotype_prefix, File preserve_eq_file) throws IOException, OWLOntologyCreationException, OWLOntologyStorageException {
         this.ontology_file = ontology_file;
         this.ontology_file_out = ontology_file_out;
         this.taxon = cl(taxon);
@@ -37,6 +40,7 @@ public class TaxonRestrictionApp {
             FileUtils.readLines(preserve_eq_file,"utf-8").forEach(s->preserve_eq.add(cl(s)));
         }
         run();
+
     }
 
     private void run() throws IOException, OWLOntologyCreationException, OWLOntologyStorageException {
@@ -51,12 +55,14 @@ public class TaxonRestrictionApp {
         Set<OWLAxiom> remove = new HashSet<>();
         Set<OWLAxiom> add = new HashSet<>();
         Set<OWLAxiom> eqs = new HashSet<>();
+        man.getOntologies().stream().collect(Collectors.toSet());
 
         for(OWLEquivalentClassesAxiom eq:o.getAxioms(AxiomType.EQUIVALENT_CLASSES, Imports.INCLUDED)) {
             if(eq.getNamedClasses().size()>1) {
                 remove.add(eq);
                 continue;
             }
+
             for(OWLClass n:eq.getNamedClasses()) {
                 if(preserve_eq.contains(n)) {
                     eqs.add(eq);
@@ -167,7 +173,7 @@ public class TaxonRestrictionApp {
         File ontology_file_out = new File(ontology_path_out);
         File preserve_eq_file = new File(preserve_eq_file_path);
 
-        new TaxonRestrictionApp(ontology_file, ontology_file_out, taxon, taxon_label, phenotype_prefix, preserve_eq_file);
+        new FypoTransformationApp(ontology_file, ontology_file_out, taxon, taxon_label, phenotype_prefix, preserve_eq_file);
     }
 
 }

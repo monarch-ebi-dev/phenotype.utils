@@ -6,7 +6,6 @@ import org.apache.commons.io.FileUtils;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
-import java.util.regex.Pattern;
 
 public class Export {
 
@@ -16,21 +15,29 @@ public class Export {
         List<String> columns = new ArrayList<>(header);
         Collections.shuffle(columns);
         StringBuilder sb = new StringBuilder();
-        columns.forEach(c->sb.append(c+","));
+        String headerString = "";
+        for(String c:columns) {
+            headerString+=c+",";
+        }
+        headerString = headerString.replaceAll(",$", "");
+        sb.append(headerString);
         sb.append("\n");
         for(Map<String,String> rec:data) {
+            String rowString = "";
             for (String col : columns) {
                 if (rec.containsKey(col)) {
                     String value = rec.get(col);
                     if(value.contains(",")||value.contains("\n")||value.contains("\r")) {
-                        sb.append("\""+value+"\"");
+                        rowString+=("\""+value+"\"");
                     } else {
-                        sb.append(value);
+                        rowString+=(value);
                     }
 
                 }
-                sb.append(",");
+                rowString+=(",");
             }
+            rowString = rowString.replaceAll(",$", "");
+            sb.append(rowString);
             sb.append("\n");
         }
         try {

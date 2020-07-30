@@ -226,7 +226,7 @@ public class GetInBetweenClasses {
     private Collection<? extends OWLClass> getSuperclasses(OWLClass e, OWLReasoner r, int i) {
         Set<OWLClass> superc = new HashSet<>();
         if(i>0) {
-            for(OWLClass s:r.getSuperClasses(e, false).getFlattened()) {
+            for(OWLClass s:r.getSuperClasses(e, true).getFlattened()) {
                 superc.add(s);
                 getSuperclasses(s, r, (i-1));
             }
@@ -247,13 +247,14 @@ public class GetInBetweenClasses {
         String legal_filler_iri_patterns_path = args[4];
         String legal_pattern_vars_path = args[5];
         int SUPER_CLASS_DEPTH = Integer.valueOf(args[6]);
-/*
-        String ontology_path = "/ws/upheno-dev/src/curation/ontologies-for-matching/mp.owl";
-        String oid_pattern_matches_dir_path = "/ws/upheno-dev/src/curation/pattern-matches/mp";
-        String pattern_dir_path = "/ws/upheno-dev/src/curation/patterns-for-matching/";
-        String oid_upheno_fillers_dir_path = "/ws/upheno-dev/src/curation/upheno-fillers/mp";
-        String legal_filler_iri_patterns_path = "/ws/upheno-dev/src/curation/legal_fillers.txt";
-        String legal_pattern_vars_path = "/ws/upheno-dev/src/curation/legal_pattern_vars.txt";
+   /*
+        String ontology_path = "/Users/matentzn/ws/upheno-dev/src/curation/ontologies-for-matching/mp.owl";
+        String oid_pattern_matches_dir_path = "/Users/matentzn/ws/upheno-dev/src/curation/pattern-matches/mp";
+        String pattern_dir_path = "/Users/matentzn/ws/upheno-dev/src/curation/patterns-for-matching/";
+        String oid_upheno_fillers_dir_path = "/Users/matentzn/ws/upheno-dev/src/curation/upheno-fillers/mp";
+        String legal_filler_iri_patterns_path = "/Users/matentzn/ws/upheno-dev/src/curation/tmp/legal_fillers.txt";
+        String legal_pattern_vars_path = "/Users/matentzn/ws/upheno-dev/src/curation/tmp/legal_pattern_vars.txt";
+        int SUPER_CLASS_DEPTH = 1;
 */
         File ontology_file = new File(ontology_path);
         File oid_pattern_matches_dir = new File(oid_pattern_matches_dir_path);
