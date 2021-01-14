@@ -13,7 +13,7 @@ public class Export {
         Set<String> header = new HashSet<>();
         data.forEach(rec->rec.keySet().forEach(k->header.add(k)));
         List<String> columns = new ArrayList<>(header);
-        Collections.shuffle(columns);
+        Collections.sort(columns);
         StringBuilder sb = new StringBuilder();
         String headerString = "";
         for(String c:columns) {

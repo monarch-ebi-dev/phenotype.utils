@@ -27,11 +27,11 @@
 			<artifactId>owlapi-distribution</artifactId>
 			<version>4.5.6</version>
 		</dependency>
-		<dependency>
+		<!--<dependency>
 			<groupId>com.nico.code</groupId>
 			<artifactId>obographstest</artifactId>
 			<version>1.0.1</version>
-		</dependency>
+		</dependency>-->
 
 		<!-- https://mvnrepository.com/artifact/commons-io/commons-io -->
 		<dependency>
@@ -273,8 +273,28 @@
 						</configuration>
 					</execution>
 					<execution>
-						<id>make-obographs-tester-app</id>
+						<id>make-ontology-linkcompare</id>
 						<!-- bind to the packaging phase -->
+						<phase>package</phase>
+						<goals>
+							<goal>single</goal>
+						</goals>
+						<configuration>
+							<archive>
+								<manifest>
+									<mainClass>monarch.ebi.phenotype.utils.CompareOntologyLinksApp</mainClass>
+								</manifest>
+							</archive>
+							<finalName>ontology_class_graph_link_analysis</finalName>
+							<appendAssemblyId>false</appendAssemblyId>
+							<descriptorRefs>
+								<descriptorRef>jar-with-dependencies</descriptorRef>
+							</descriptorRefs>
+						</configuration>
+					</execution>
+					<!-- <execution>
+						<id>make-obographs-tester-app</id>
+						bind to the packaging phase
 						<phase>package</phase>
 						<goals>
 							<goal>single</goal>
@@ -291,7 +311,7 @@
 								<descriptorRef>jar-with-dependencies</descriptorRef>
 							</descriptorRefs>
 						</configuration>
-					</execution>
+					</execution> -->
 				</executions>
 			</plugin>
 		</plugins>

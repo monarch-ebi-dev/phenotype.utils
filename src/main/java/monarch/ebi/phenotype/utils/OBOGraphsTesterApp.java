@@ -1,5 +1,6 @@
 package monarch.ebi.phenotype.utils;
 
+/**
 import com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.commons.io.FileUtils;
 import org.geneontology.obographs.io.OgJsonGenerator;
@@ -17,9 +18,9 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
+
  * Hello world!
- */
+
 public class OBOGraphsTesterApp {
 
     private final File ontology_file;
@@ -70,13 +71,14 @@ public class OBOGraphsTesterApp {
     public static void main(String[] args) throws OWLOntologyCreationException {
 		String ontology_path = args[0];
         String testdir_path = args[1];
-/*
-        String ontology_path = "/Users/matentzn/ws/pato/pato.owl";
-        String testdir_path = "/Users/matentzn/data";
-*/
+
+//        String ontology_path = "/Users/matentzn/ws/pato/pato.owl";
+ // String testdir_path = "/Users/matentzn/data";
+
         File ontology_file = new File(ontology_path);
         File testdir_file = new File(testdir_path);
         new OBOGraphsTesterApp(ontology_file,testdir_file);
     }
 
 }
+ */
