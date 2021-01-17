@@ -73,7 +73,7 @@ public class CompareOntologyLinksApp {
         Set<LinkBetweenEntity> difference = new HashSet<>(union);
         difference.removeAll(intersection);
         log("O1 classes: "+o1_classes.size()+" ("+o1_obsoleted_classes.size()+" obsolete)");
-        log("O2 classes: "+o2_classes.size()+" ("+o1_obsoleted_classes.size()+" obsolete)");
+        log("O2 classes: "+o2_classes.size()+" ("+o2_obsoleted_classes.size()+" obsolete)");
         log("O1: "+linkBetweenEntityO1.size());
         log("O2: "+linkBetweenEntityO2.size());
         log("Union: "+union.size());
