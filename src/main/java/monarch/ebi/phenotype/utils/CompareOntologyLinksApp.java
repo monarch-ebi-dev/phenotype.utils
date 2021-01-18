@@ -4,6 +4,8 @@ import org.semanticweb.elk.owlapi.ElkReasonerFactory;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.*;
 import org.semanticweb.owlapi.reasoner.OWLReasoner;
+import org.semanticweb.owlapi.reasoner.OWLReasonerFactory;
+import org.semanticweb.owlapi.reasoner.structural.StructuralReasonerFactory;
 import org.semanticweb.owlapi.search.EntitySearcher;
 
 import java.io.File;
@@ -17,6 +19,7 @@ public class CompareOntologyLinksApp {
     private final File ontology2_file;
     private final boolean allSignature;
     private final IRI subClassIRI = IRI.create("http://www.w3.org/2000/01/rdf-schema#subClassOf");
+    private final int printStepSize = 1000;
 
     private final File data_out;
     private static final OWLDataFactory df = OWLManager.getOWLDataFactory();
@@ -24,13 +27,15 @@ public class CompareOntologyLinksApp {
     private final OWLClass obsoleteClass = df.getOWLClass(IRI.create("http://www.geneontology.org/formats/oboInOwl#ObsoleteClass"));
     private final Map<LinkBetweenEntity,Map<String,Set<String>>> additionalMetadata = new HashMap<>();
     private final RenderManager ren = RenderManager.getInstance();
+    private final OWLReasonerFactory rf;
 
 
-    private CompareOntologyLinksApp(File ontology1_file, File ontology2_file, boolean allSignature, File data_out) throws OWLOntologyCreationException {
+    private CompareOntologyLinksApp(File ontology1_file, File ontology2_file, OWLReasonerFactory rf , boolean allSignature, File data_out) throws OWLOntologyCreationException {
         this.ontology1_file = ontology1_file;
         this.ontology2_file = ontology2_file;
         this.data_out = data_out;
         this.allSignature = allSignature;
+        this.rf = rf;
         run();
     }
 
@@ -50,8 +55,8 @@ public class CompareOntologyLinksApp {
         List<Map<String,String>> data = new ArrayList<>();
         OWLOntology o1 = OWLManager.createOWLOntologyManager().loadOntology(IRI.create(ontology1_file));
         OWLOntology o2 = OWLManager.createOWLOntologyManager().loadOntology(IRI.create(ontology2_file));
-        OWLReasoner r1 = new ElkReasonerFactory().createReasoner(o1);
-        OWLReasoner r2 = new ElkReasonerFactory().createReasoner(o2);
+        OWLReasoner r1 = rf.createReasoner(o1);
+        OWLReasoner r2 = rf.createReasoner(o2);
         ren.addLabel(o1);
         ren.addLabel(o2);
         Set<OWLClass> o1_classes = o1.getClassesInSignature();
@@ -79,8 +84,13 @@ public class CompareOntologyLinksApp {
         log("Union: "+union.size());
         log("Intersection: "+intersection.size());
         log("Difference: "+difference.size());
+        int ct = 0;
         for(LinkBetweenEntity l:union) {
-            Map<String,String> rec = l.getLinkData();
+            ct++;
+            if(ct % printStepSize == 0) {
+                log(ct+"/"+union.size()+" processed.");
+            }
+            Map<String,String> rec = new HashMap<>();
             additionalMetadataToRec(l, rec);
             OWLClass c1 = df.getOWLClass(l.e1);
             OWLClass c2 = df.getOWLClass(l.e2);
@@ -277,9 +287,22 @@ public class CompareOntologyLinksApp {
 
         String ontology1_path = args[0];
         String ontology2_path = args[1];
-        String data_out = args[2];
-        boolean all_signature = args[3].equals("all");
+        boolean all_signature = args[2].equals("all");
+        String reasoner = args[3];
+        String data_out = args[4];
 
+        OWLReasonerFactory rf;
+        switch (reasoner){
+            case "elk":
+                rf = new ElkReasonerFactory();
+                break;
+            case "structural":
+                rf = new StructuralReasonerFactory();
+                break;
+            default:
+                rf = new ElkReasonerFactory();
+                break;
+        }
 
         /*
         String ontology1_path = "/Users/matentzn/ws/mondo-analysis/sources/mondo.owl";
@@ -292,7 +315,7 @@ public class CompareOntologyLinksApp {
         File ontology2_file = new File(ontology2_path);
         File ontology_out = new File(data_out);
 
-        new CompareOntologyLinksApp(ontology1_file, ontology2_file, all_signature, ontology_out);
+        new CompareOntologyLinksApp(ontology1_file, ontology2_file, rf, all_signature, ontology_out);
     }
 
 }

@@ -10,7 +10,6 @@ public class LinkBetweenEntity {
     final IRI e1;
     final IRI e2;
     final IRI relation;
-    final Map<String,String> additionalMetadata = new HashMap<>();
 
     public LinkBetweenEntity(IRI e1, IRI e2, IRI relation) {
         this.e1 = e1;
@@ -31,14 +30,6 @@ public class LinkBetweenEntity {
     @Override
     public int hashCode() {
         return Objects.hash(e1, e2, relation);
-    }
-
-    public Map<String,String> getLinkData() {
-        Map<String,String> map = new HashMap<>();
-        map.put("e1", e1.toString());
-        map.put("e2", e2.toString());
-        map.put("r", relation.toString());
-        return map;
     }
 
     @Override
