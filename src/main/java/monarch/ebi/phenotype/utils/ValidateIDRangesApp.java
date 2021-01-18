@@ -87,13 +87,13 @@ public class ValidateIDRangesApp {
 
 
     public static void main(String[] args) throws OWLOntologyCreationException {
-/*
-        String id_range_path = args[0];
-*/
 
+        String id_range_path = args[0];
+
+/*
         String id_range_path = "/Users/matentzn/knocean/cell-ontology/src/ontology/cl-idranges.owl";
 
-
+*/
         File id_range_file = new File(id_range_path);
         run(id_range_file);
     }
