@@ -46,7 +46,10 @@ public class CompareOntologyLinksApp {
             return "asserted";
         } else if(linkImplied(l,r)) {
            return "inferred";
-        } else {
+        } else if(linkWouldCauseUnsatisfiability(l,r)) {
+            return "incoherent";
+        }
+        else {
             return "none";
         }
     }
@@ -213,6 +216,24 @@ public class CompareOntologyLinksApp {
         return r.isEntailed(ax);
     }
 
+    private boolean linkWouldCauseUnsatisfiability(LinkBetweenEntity l, OWLReasoner r) {
+        Set<OWLAxiom> axiom = new HashSet<>(r.getRootOntology().getLogicalAxioms());
+        OWLAxiom ax;
+        if(l.relation.equals(subClassIRI)) {
+            ax = df.getOWLSubClassOfAxiom(df.getOWLClass(l.e1),df.getOWLClass(l.e2));
+        } else {
+            // we assume its and existential restricton.
+            ax = df.getOWLSubClassOfAxiom(df.getOWLClass(l.e1),df.getOWLObjectSomeValuesFrom(df.getOWLObjectProperty(l.relation),df.getOWLClass(l.e2)));
+        }
+        axiom.add(ax);
+        r.getRootOntology().getOWLOntologyManager().addAxiom(r.getRootOntology(),ax);
+        r.flush();
+        boolean unsat= r.getUnsatisfiableClasses().getEntities().isEmpty();
+        r.getRootOntology().getOWLOntologyManager().removeAxiom(r.getRootOntology(),ax);
+        r.flush();
+        return unsat;
+    }
+
     @SuppressWarnings("SuspiciousMethodCalls")
     private Set<LinkBetweenEntity> getAllAssertedLinksBetweenEntities(OWLOntology o, Set<OWLClass> signature) {
         Set<LinkBetweenEntity> links = new HashSet<>();
@@ -291,6 +312,15 @@ public class CompareOntologyLinksApp {
         String reasoner = args[3];
         String data_out = args[4];
 
+
+
+/*
+        String ontology1_path = "/Users/matentzn/ws/mondo-analysis/sources/mondo.owl";
+        String ontology2_path = "/Users/matentzn/ws/mondo-analysis/mondo_translate/omim.owl";
+        String data_out = "/Users/matentzn/ws/mondo-analysis/mondo_translate/mondo-omim-analysis.csv";
+        boolean all_signature = true;
+        String reasoner = "elk";
+*/
         OWLReasonerFactory rf;
         switch (reasoner){
             case "elk":
@@ -303,13 +333,6 @@ public class CompareOntologyLinksApp {
                 rf = new ElkReasonerFactory();
                 break;
         }
-
-        /*
-        String ontology1_path = "/Users/matentzn/ws/mondo-analysis/sources/mondo.owl";
-        String ontology2_path = "/Users/matentzn/ws/mondo-analysis/mondo_translate/omim.owl";
-        String data_out = "/Users/matentzn/ws/mondo-analysis/mondo_translate/mondo-omim-analysis.csv";
-        boolean all_signature = true;
- */
 
         File ontology1_file = new File(ontology1_path);
         File ontology2_file = new File(ontology2_path);
